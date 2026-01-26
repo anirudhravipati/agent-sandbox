@@ -32,6 +32,8 @@ OPTIONS:
         --prompt-permissions  Same as --safe-mode
     -s, --include-sensitive Disable sensitive file protection (NOT RECOMMENDED)
                             Allows access to SSH keys, credentials, tokens, etc.
+    -l, --log               Enable session logging to file
+    -e, --protect-env       Block .env files in working directory
 
 CLAUDE ARGUMENTS:
     All Claude Code options are supported. Use '--' to separate sandbox
@@ -50,6 +52,8 @@ CLAUDE ARGUMENTS:
 EXAMPLES:
     ${SCRIPT_NAME}                    Run Claude in sandbox with default settings
     ${SCRIPT_NAME} --safe-mode        Run with permission prompts enabled
+    ${SCRIPT_NAME} --log              Run with session logging enabled
+    ${SCRIPT_NAME} --protect-env      Run with .env files blocked
     ${SCRIPT_NAME} -- --model opus    Pass arguments to Claude
     ${SCRIPT_NAME} -p -- -c "task"    Safe mode with a specific Claude command
 
@@ -70,7 +74,8 @@ PREREQUISITES:
     Claude Code must be installed and available in PATH.
 
 SESSION LOGS:
-    Each session is logged to: claude_session_YYYY-MM-DD_HH-MM-SS.log
+    Use -l or --log to enable session logging.
+    Logs are saved to: claude_session_YYYY-MM-DD_HH-MM-SS.log
 
 For more information: https://github.com/containers/bubblewrap
 EOF
@@ -164,6 +169,8 @@ is_sensitive_path() {
 # --- Parse Arguments ---
 SAFE_MODE=false
 INCLUDE_SENSITIVE=false
+ENABLE_LOG=false
+PROTECT_ENV=false
 CLAUDE_ARGS=()
 
 for arg in "$@"; do
@@ -176,6 +183,12 @@ for arg in "$@"; do
             ;;
         -s|--include-sensitive)
             INCLUDE_SENSITIVE=true
+            ;;
+        -l|--log)
+            ENABLE_LOG=true
+            ;;
+        -e|--protect-env)
+            PROTECT_ENV=true
             ;;
         *)
             CLAUDE_ARGS+=("$arg")
@@ -193,6 +206,12 @@ if [ "$INCLUDE_SENSITIVE" = true ]; then
     echo "⚠️  Sensitive Protection: DISABLED (--include-sensitive)"
 else
     echo "🔒 Sensitive Protection: ENABLED"
+fi
+if [ "$ENABLE_LOG" = true ]; then
+    echo "📝 Session Logging: ENABLED (--log)"
+fi
+if [ "$PROTECT_ENV" = true ]; then
+    echo "🔐 Env Protection: ENABLED (--protect-env)"
 fi
 echo "---------------------------------------"
 
@@ -287,6 +306,27 @@ if [ "$INCLUDE_SENSITIVE" = false ]; then
     fi
 fi
 
+# Layer 3.6: Block .env files in the work directory (if --protect-env is used)
+if [ "$PROTECT_ENV" = true ]; then
+    ENV_BLOCKED=()
+
+    # Scan for .env* files in work directory
+    while IFS= read -r -d '' env_file; do
+        if [ -f "$env_file" ]; then
+            BWRAP_ARGS="$BWRAP_ARGS --ro-bind /dev/null \"$env_file\""
+            ENV_BLOCKED+=("$env_file")
+        fi
+    done < <(find "$CURRENT_DIR" -maxdepth 3 -name ".env*" -print0 2>/dev/null)
+
+    # Print blocked .env paths if any were found
+    if [ ${#ENV_BLOCKED[@]} -gt 0 ]; then
+        echo "🚫 Protected .env Files in Work Dir:"
+        for blocked in "${ENV_BLOCKED[@]}"; do
+            echo "   - [BLOCKED] $blocked"
+        done
+    fi
+fi
+
 # --- 2. Execute ---
 echo "---------------------------------------"
 
@@ -299,8 +339,15 @@ else
     FULL_CMD="bwrap $BWRAP_ARGS --share-net --new-session --die-with-parent claude --dangerously-skip-permissions ${CLAUDE_ARGS[*]}"
 fi
 
-# Run with 'script' to preserve TTY and logging
-script -q -e -c "$FULL_CMD" "$LOG_FILE"
-
-echo "---------------------------------------"
-echo "✅ Session finished. Log: $LOG_FILE"
+# Run the command (with or without logging)
+if [ "$ENABLE_LOG" = true ]; then
+    # Run with 'script' to preserve TTY and logging
+    script -q -e -c "$FULL_CMD" "$LOG_FILE"
+    echo "---------------------------------------"
+    echo "✅ Session finished. Log saved to: $LOG_FILE"
+else
+    # Run directly without logging
+    eval "$FULL_CMD"
+    echo "---------------------------------------"
+    echo "✅ Session finished."
+fi
