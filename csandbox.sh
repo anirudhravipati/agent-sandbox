@@ -1,6 +1,98 @@
 #!/bin/bash
 
-# Install bubblewrap using apt install bubblewrap or find specific instructions for your needs here https://github.com/containers/bubblewrap
+# csandbox - Hardened sandbox for running Claude Code
+# https://github.com/containers/bubblewrap
+
+VERSION="1.0.0"
+SCRIPT_NAME=$(basename "$0")
+
+# --- Help Function ---
+show_help() {
+    cat << EOF
+${SCRIPT_NAME} - Run Claude Code in a hardened sandbox using bubblewrap
+
+DESCRIPTION:
+    This script creates an isolated environment for running Claude Code with
+    filesystem protections. It uses bubblewrap (bwrap) to create a layered
+    mount system that:
+
+    • Mounts the entire filesystem read-only by default
+    • Protects your home directory from modifications
+    • Blocks access to sensitive files (SSH keys, credentials, tokens)
+    • Allows read-write access only to Claude configs and current directory
+    • Logs all session activity for review
+
+USAGE:
+    ${SCRIPT_NAME} [OPTIONS] [-- CLAUDE_ARGS...]
+
+OPTIONS:
+    -h, --help              Show this help message and exit
+    -v, --version           Show version information and exit
+    -p, --safe-mode         Enable safe mode (prompt for permissions)
+        --prompt-permissions  Same as --safe-mode
+    -s, --include-sensitive Disable sensitive file protection (NOT RECOMMENDED)
+                            Allows access to SSH keys, credentials, tokens, etc.
+
+CLAUDE ARGUMENTS:
+    All Claude Code options are supported. Use '--' to separate sandbox
+    options from Claude options:
+
+        ${SCRIPT_NAME} [SANDBOX_OPTIONS] -- [CLAUDE_OPTIONS]
+
+    Common Claude options:
+        --model <model>       Select model (e.g., opus, sonnet)
+        -c, --command <cmd>   Run a single command and exit
+        --print               Print response without interactive mode
+        -r, --resume          Resume previous conversation
+
+    Run 'claude --help' for the full list of Claude options.
+
+EXAMPLES:
+    ${SCRIPT_NAME}                    Run Claude in sandbox with default settings
+    ${SCRIPT_NAME} --safe-mode        Run with permission prompts enabled
+    ${SCRIPT_NAME} -- --model opus    Pass arguments to Claude
+    ${SCRIPT_NAME} -p -- -c "task"    Safe mode with a specific Claude command
+
+PROTECTED PATHS:
+    The following are blocked by default (use --include-sensitive to allow):
+
+    Directories: ~/.ssh, ~/.gnupg, ~/.aws, ~/.config/gcloud, ~/.kube
+    Files:       ~/.netrc, ~/.npmrc, ~/.docker/config.json, ~/.git-credentials
+    Patterns:    *_credentials, *_token, *.pem, *.key, *_secret, *.p12, *.pfx
+
+PREREQUISITES:
+    Install bubblewrap:
+        Debian/Ubuntu: sudo apt install bubblewrap
+        Fedora:        sudo dnf install bubblewrap
+        Arch:          sudo pacman -S bubblewrap
+        macOS:         See https://github.com/containers/bubblewrap
+
+    Claude Code must be installed and available in PATH.
+
+SESSION LOGS:
+    Each session is logged to: claude_session_YYYY-MM-DD_HH-MM-SS.log
+
+For more information: https://github.com/containers/bubblewrap
+EOF
+}
+
+show_version() {
+    echo "${SCRIPT_NAME} version ${VERSION}"
+}
+
+# --- Early Flag Check (help/version) ---
+for arg in "$@"; do
+    case "$arg" in
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        -v|--version)
+            show_version
+            exit 0
+            ;;
+    esac
+done
 
 CURRENT_DIR=$(pwd)
 HOME_DIR=$HOME
@@ -76,10 +168,13 @@ CLAUDE_ARGS=()
 
 for arg in "$@"; do
     case "$arg" in
-        --safe-mode|-p|--prompt-permissions)
+        -h|--help|-v|--version)
+            # Already handled in early flag check
+            ;;
+        -p|--safe-mode|--prompt-permissions)
             SAFE_MODE=true
             ;;
-        --include-sensitive|-s)
+        -s|--include-sensitive)
             INCLUDE_SENSITIVE=true
             ;;
         *)
