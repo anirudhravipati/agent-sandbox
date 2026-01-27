@@ -18,10 +18,24 @@ This repository provides a hardened sandbox script (`csandbox.sh` v1.0.0) for ru
 |--------|-------------|
 | `-h, --help` | Show help message |
 | `-v, --version` | Show version |
+| `--install` | Install to ~/.local/bin/csandbox |
+| `--uninstall` | Remove from ~/.local/bin/csandbox |
 | `-p, --safe-mode` | Enable safe mode (prompt for permissions) |
 | `-s, --include-sensitive` | Disable sensitive file protection (NOT RECOMMENDED) |
 | `-l, --log` | Enable session logging to file |
 | `-e, --protect-env` | Block .env files in working directory |
+
+### Installation
+
+```bash
+./csandbox.sh --install    # Install to ~/.local/bin/csandbox
+csandbox                   # Run from anywhere
+```
+
+If `~/.local/bin` is not in your PATH, add this to your shell config:
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
 
 ### Examples
 

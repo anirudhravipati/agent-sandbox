@@ -28,6 +28,8 @@ USAGE:
 OPTIONS:
     -h, --help              Show this help message and exit
     -v, --version           Show version information and exit
+    --install               Install to ~/.local/bin/csandbox
+    --uninstall             Remove from ~/.local/bin/csandbox
     -p, --safe-mode         Enable safe mode (prompt for permissions)
         --prompt-permissions  Same as --safe-mode
     -s, --include-sensitive Disable sensitive file protection (NOT RECOMMENDED)
@@ -85,7 +87,50 @@ show_version() {
     echo "${SCRIPT_NAME} version ${VERSION}"
 }
 
-# --- Early Flag Check (help/version) ---
+INSTALL_DIR="$HOME/.local/bin"
+INSTALL_PATH="$INSTALL_DIR/csandbox"
+
+do_install() {
+    # Get the actual script path (resolve symlinks)
+    local script_path
+    script_path="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+
+    # Create install directory if needed
+    if [ ! -d "$INSTALL_DIR" ]; then
+        echo "Creating $INSTALL_DIR..."
+        mkdir -p "$INSTALL_DIR"
+    fi
+
+    # Copy script
+    echo "Installing to $INSTALL_PATH..."
+    cp "$script_path" "$INSTALL_PATH"
+    chmod +x "$INSTALL_PATH"
+
+    # Check if ~/.local/bin is in PATH
+    if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
+        echo ""
+        echo "⚠️  $INSTALL_DIR is not in your PATH."
+        echo "   Add this to your ~/.bashrc or ~/.zshrc:"
+        echo ""
+        echo "   export PATH=\"\$HOME/.local/bin:\$PATH\""
+        echo ""
+    fi
+
+    echo "✅ Installed! You can now run 'csandbox' from anywhere."
+}
+
+do_uninstall() {
+    if [ -f "$INSTALL_PATH" ]; then
+        echo "Removing $INSTALL_PATH..."
+        rm "$INSTALL_PATH"
+        echo "✅ Uninstalled."
+    else
+        echo "csandbox is not installed at $INSTALL_PATH"
+        exit 1
+    fi
+}
+
+# --- Early Flag Check (help/version/install) ---
 for arg in "$@"; do
     case "$arg" in
         -h|--help)
@@ -94,6 +139,14 @@ for arg in "$@"; do
             ;;
         -v|--version)
             show_version
+            exit 0
+            ;;
+        --install)
+            do_install
+            exit 0
+            ;;
+        --uninstall)
+            do_uninstall
             exit 0
             ;;
     esac
