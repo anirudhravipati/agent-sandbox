@@ -24,6 +24,7 @@ This repository provides a hardened sandbox script (`csandbox.sh` v1.0.0) for ru
 | `-s, --include-sensitive` | Disable sensitive file protection (NOT RECOMMENDED) |
 | `-l, --log` | Enable session logging to file |
 | `-e, --protect-env` | Block .env files in working directory |
+| `-b, --browser` | Enable agent-browser support inside sandbox |
 
 ### Installation
 
@@ -44,6 +45,7 @@ export PATH="$HOME/.local/bin:$PATH"
 ./csandbox.sh --safe-mode         # Prompt for permissions
 ./csandbox.sh --log               # Enable session logging
 ./csandbox.sh --protect-env       # Block .env files
+./csandbox.sh --browser           # Enable agent-browser support
 ./csandbox.sh -- --model opus     # Pass arguments to Claude
 ```
 
@@ -64,6 +66,7 @@ The script creates a layered mount system:
 4. **Claude configs** (`~/.claude*`): Mounted read-write for persistence
 5. **Current working directory**: Mounted read-write for project access
 6. **Env protection** (optional): Blocks `.env*` files with `--protect-env`
+7. **Agent-browser** (optional): Mounts socket directory read-write with `--browser`
 
 ### Protected Sensitive Paths
 
