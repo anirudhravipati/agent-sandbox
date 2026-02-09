@@ -38,6 +38,8 @@ OPTIONS:
     -e, --protect-env       Block .env files in working directory
     -b, --browser           Enable agent-browser support inside sandbox
                             Mounts the agent-browser socket directory read-write
+    -t, --no-teams          Disable experimental agent teams
+                            (Agent teams are enabled by default)
 
 CLAUDE ARGUMENTS:
     All Claude Code options are supported. Use '--' to separate sandbox
@@ -60,6 +62,7 @@ EXAMPLES:
     ${SCRIPT_NAME} --protect-env      Run with .env files blocked
     ${SCRIPT_NAME} -- --model opus    Pass arguments to Claude
     ${SCRIPT_NAME} --browser             Run with agent-browser support
+    ${SCRIPT_NAME} --no-teams            Run with agent teams disabled
     ${SCRIPT_NAME} -p -- -c "task"    Safe mode with a specific Claude command
 
 PROTECTED PATHS:
@@ -78,6 +81,11 @@ PREREQUISITES:
 
     Claude Code must be installed and available in PATH.
     agent-browser (optional): npm install -g agent-browser && agent-browser install
+
+AGENT TEAMS:
+    The sandbox automatically enables the experimental agent teams feature
+    by setting CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 inside the sandbox.
+    This allows Claude to coordinate multiple instances working in parallel.
 
 SESSION LOGS:
     Use -l or --log to enable session logging.
@@ -229,6 +237,7 @@ INCLUDE_SENSITIVE=false
 ENABLE_LOG=false
 PROTECT_ENV=false
 ENABLE_BROWSER=false
+DISABLE_TEAMS=false
 CLAUDE_ARGS=()
 
 for arg in "$@"; do
@@ -250,6 +259,9 @@ for arg in "$@"; do
             ;;
         -b|--browser)
             ENABLE_BROWSER=true
+            ;;
+        -t|--no-teams)
+            DISABLE_TEAMS=true
             ;;
         *)
             CLAUDE_ARGS+=("$arg")
@@ -408,6 +420,14 @@ if [ "$ENABLE_BROWSER" = true ]; then
     echo "🌐 Unlocking Agent-Browser:"
     echo "   - [RW] $AB_SOCKET_DIR (socket dir)"
     BWRAP_ARGS="$BWRAP_ARGS --bind \"$AB_SOCKET_DIR\" \"$AB_SOCKET_DIR\""
+fi
+
+# Layer 5: Enable experimental agent teams (unless --no-teams)
+if [ "$DISABLE_TEAMS" = true ]; then
+    echo "🤖 Agent Teams: DISABLED (--no-teams)"
+else
+    BWRAP_ARGS="$BWRAP_ARGS --setenv CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS 1"
+    echo "🤖 Agent Teams: ENABLED (CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1)"
 fi
 
 # --- 2. Execute ---

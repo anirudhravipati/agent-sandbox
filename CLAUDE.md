@@ -25,6 +25,7 @@ This repository provides a hardened sandbox script (`csandbox.sh` v1.0.0) for ru
 | `-l, --log` | Enable session logging to file |
 | `-e, --protect-env` | Block .env files in working directory |
 | `-b, --browser` | Enable agent-browser support inside sandbox |
+| `-t, --no-teams` | Disable agent teams (enabled by default) |
 
 ### Installation
 
@@ -46,6 +47,7 @@ export PATH="$HOME/.local/bin:$PATH"
 ./csandbox.sh --log               # Enable session logging
 ./csandbox.sh --protect-env       # Block .env files
 ./csandbox.sh --browser           # Enable agent-browser support
+./csandbox.sh --no-teams          # Disable agent teams
 ./csandbox.sh -- --model opus     # Pass arguments to Claude
 ```
 
@@ -67,6 +69,7 @@ The script creates a layered mount system:
 5. **Current working directory**: Mounted read-write for project access
 6. **Env protection** (optional): Blocks `.env*` files with `--protect-env`
 7. **Agent-browser** (optional): Mounts socket directory read-write with `--browser`
+8. **Agent teams**: Sets `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` by default (disable with `--no-teams`)
 
 ### Protected Sensitive Paths
 
