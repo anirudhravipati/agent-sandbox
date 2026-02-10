@@ -40,6 +40,9 @@ OPTIONS:
                             Mounts the agent-browser socket directory read-write
     -t, --no-teams          Disable experimental agent teams
                             (Agent teams are enabled by default)
+    -R, --ro-dir <dir>      Mount a directory inside the working directory as
+                            read-only. Can be specified multiple times.
+                            Paths are relative to the working directory.
 
 CLAUDE ARGUMENTS:
     All Claude Code options are supported. Use '--' to separate sandbox
@@ -63,7 +66,24 @@ EXAMPLES:
     ${SCRIPT_NAME} -- --model opus    Pass arguments to Claude
     ${SCRIPT_NAME} --browser             Run with agent-browser support
     ${SCRIPT_NAME} --no-teams            Run with agent teams disabled
+    ${SCRIPT_NAME} --ro-dir vendor        Protect vendor/ from writes
+    ${SCRIPT_NAME} -R lib -R dist         Protect multiple directories
     ${SCRIPT_NAME} -p -- -c "task"    Safe mode with a specific Claude command
+
+READ-ONLY DIRECTORIES:
+    Directories can be made read-only within the working directory using
+    the -R/--ro-dir flag or a .csandbox.ro file in the working directory.
+
+    The .csandbox.ro file lists one directory per line (relative to the
+    working directory). Empty lines and lines starting with # are ignored.
+
+    Example .csandbox.ro:
+        # Third-party code - do not modify
+        vendor
+        node_modules
+        dist
+
+    Entries from .csandbox.ro are combined with any -R/--ro-dir flags.
 
 PROTECTED PATHS:
     The following are blocked by default (use --include-sensitive to allow):
@@ -238,33 +258,55 @@ ENABLE_LOG=false
 PROTECT_ENV=false
 ENABLE_BROWSER=false
 DISABLE_TEAMS=false
+RO_DIRS=()
 CLAUDE_ARGS=()
 
-for arg in "$@"; do
-    case "$arg" in
+while [[ $# -gt 0 ]]; do
+    case "$1" in
         -h|--help|-v|--version)
             # Already handled in early flag check
+            shift
             ;;
         -p|--safe-mode|--prompt-permissions)
             SAFE_MODE=true
+            shift
             ;;
         -s|--include-sensitive)
             INCLUDE_SENSITIVE=true
+            shift
             ;;
         -l|--log)
             ENABLE_LOG=true
+            shift
             ;;
         -e|--protect-env)
             PROTECT_ENV=true
+            shift
             ;;
         -b|--browser)
             ENABLE_BROWSER=true
+            shift
             ;;
         -t|--no-teams)
             DISABLE_TEAMS=true
+            shift
+            ;;
+        -R|--ro-dir)
+            if [[ -z "${2:-}" ]]; then
+                echo "Error: $1 requires a directory argument"
+                exit 1
+            fi
+            RO_DIRS+=("$2")
+            shift 2
+            ;;
+        --)
+            shift
+            CLAUDE_ARGS+=("$@")
+            break
             ;;
         *)
-            CLAUDE_ARGS+=("$arg")
+            CLAUDE_ARGS+=("$1")
+            shift
             ;;
     esac
 done
@@ -288,6 +330,9 @@ if [ "$PROTECT_ENV" = true ]; then
 fi
 if [ "$ENABLE_BROWSER" = true ]; then
     echo "🌐 Agent-Browser: ENABLED (--browser)"
+fi
+if [ ${#RO_DIRS[@]} -gt 0 ]; then
+    echo "📖 Read-Only Dirs: ${#RO_DIRS[@]} specified (--ro-dir)"
 fi
 echo "---------------------------------------"
 
@@ -399,6 +444,63 @@ if [ "$PROTECT_ENV" = true ]; then
         echo "🚫 Protected .env Files in Work Dir:"
         for blocked in "${ENV_BLOCKED[@]}"; do
             echo "   - [BLOCKED] $blocked"
+        done
+    fi
+fi
+
+# Layer 3.7: Mount specified directories as read-only within the work directory
+# Load entries from .csandbox.ro file if it exists
+RO_FILE="$CURRENT_DIR/.csandbox.ro"
+if [ -f "$RO_FILE" ]; then
+    RO_FILE_COUNT=0
+    while IFS= read -r line; do
+        # Skip empty lines and comments
+        line="${line%%#*}"     # strip inline comments
+        line="${line%"${line##*[![:space:]]}"}"  # trim trailing whitespace
+        line="${line#"${line%%[![:space:]]*}"}"   # trim leading whitespace
+        [[ -z "$line" ]] && continue
+        RO_DIRS+=("$line")
+        ((RO_FILE_COUNT++))
+    done < "$RO_FILE"
+    echo "📄 Loaded .csandbox.ro ($RO_FILE_COUNT entries)"
+fi
+
+if [ ${#RO_DIRS[@]} -gt 0 ]; then
+    RO_APPLIED=()
+
+    for ro_dir in "${RO_DIRS[@]}"; do
+        # Resolve relative paths against the working directory
+        if [[ "$ro_dir" = /* ]]; then
+            ro_full="$ro_dir"
+        else
+            ro_full="$CURRENT_DIR/$ro_dir"
+        fi
+
+        # Normalize the path (resolve .., symlinks, etc.)
+        if [ -e "$ro_full" ]; then
+            ro_full=$(cd "$ro_full" && pwd)
+        fi
+
+        # Verify the directory exists
+        if [ ! -d "$ro_full" ]; then
+            echo "⚠️  Warning: --ro-dir target does not exist or is not a directory: $ro_dir"
+            continue
+        fi
+
+        # Verify it's within the working directory
+        if [[ "$ro_full" != "$CURRENT_DIR"/* ]]; then
+            echo "⚠️  Warning: --ro-dir path is outside the working directory, skipping: $ro_dir"
+            continue
+        fi
+
+        BWRAP_ARGS="$BWRAP_ARGS --ro-bind \"$ro_full\" \"$ro_full\""
+        RO_APPLIED+=("$ro_full")
+    done
+
+    if [ ${#RO_APPLIED[@]} -gt 0 ]; then
+        echo "📖 Read-Only Directories in Work Dir:"
+        for ro_path in "${RO_APPLIED[@]}"; do
+            echo "   - [RO] $ro_path"
         done
     fi
 fi
