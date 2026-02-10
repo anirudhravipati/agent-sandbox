@@ -453,7 +453,7 @@ fi
 RO_FILE="$CURRENT_DIR/.csandbox.ro"
 if [ -f "$RO_FILE" ]; then
     RO_FILE_COUNT=0
-    while IFS= read -r line; do
+    while IFS= read -r line || [[ -n "$line" ]]; do
         # Skip empty lines and comments
         line="${line%%#*}"     # strip inline comments
         line="${line%"${line##*[![:space:]]}"}"  # trim trailing whitespace
