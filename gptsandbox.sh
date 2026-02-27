@@ -39,6 +39,7 @@ OPTIONS:
     -R, --ro-dir <dir>      Mount a directory inside the working directory as
                             read-only. Can be specified multiple times.
                             Paths are relative to the working directory.
+    --no-multi-agent        Disable default Codex multi-agent feature flag
 
 CODEX ARGUMENTS:
     All Codex CLI options are supported. Use '--' to separate sandbox
@@ -64,6 +65,7 @@ EXAMPLES:
     ${SCRIPT_NAME} -- "analyze this project"   Start Codex with prompt
     ${SCRIPT_NAME} --ro-dir vendor        Protect vendor/ from writes
     ${SCRIPT_NAME} -R lib -R dist         Protect multiple directories
+    ${SCRIPT_NAME} --no-multi-agent       Run without forcing multi-agent
 
 READ-ONLY DIRECTORIES:
     Directories can be made read-only within the working directory using
@@ -244,6 +246,7 @@ SAFE_MODE=false
 INCLUDE_SENSITIVE=false
 ENABLE_LOG=false
 PROTECT_ENV=false
+ENABLE_MULTI_AGENT=true
 RO_DIRS=()
 CODEX_ARGS=()
 
@@ -277,6 +280,10 @@ while [[ $# -gt 0 ]]; do
             RO_DIRS+=("$2")
             shift 2
             ;;
+        --no-multi-agent)
+            ENABLE_MULTI_AGENT=false
+            shift
+            ;;
         --)
             shift
             CODEX_ARGS+=("$@")
@@ -305,6 +312,11 @@ if [ "$ENABLE_LOG" = true ]; then
 fi
 if [ "$PROTECT_ENV" = true ]; then
     echo "🔐 Env Protection: ENABLED (--protect-env)"
+fi
+if [ "$ENABLE_MULTI_AGENT" = true ]; then
+    echo "🤖 Multi-Agent: ENABLED (default --enable multi_agent)"
+else
+    echo "🤖 Multi-Agent: DISABLED (--no-multi-agent)"
 fi
 if [ ${#RO_DIRS[@]} -gt 0 ]; then
     echo "📖 Read-Only Dirs: ${#RO_DIRS[@]} specified (--ro-dir)"
@@ -460,10 +472,16 @@ echo "---------------------------------------"
 
 # Construct the final command
 if [ "$SAFE_MODE" = true ]; then
-    FULL_CMD="bwrap $BWRAP_ARGS --share-net --new-session --die-with-parent codex ${CODEX_ARGS[*]}"
+    FULL_CMD="bwrap $BWRAP_ARGS --share-net --new-session --die-with-parent codex"
 else
-    FULL_CMD="bwrap $BWRAP_ARGS --share-net --new-session --die-with-parent codex --dangerously-bypass-approvals-and-sandbox ${CODEX_ARGS[*]}"
+    FULL_CMD="bwrap $BWRAP_ARGS --share-net --new-session --die-with-parent codex --dangerously-bypass-approvals-and-sandbox"
 fi
+
+if [ "$ENABLE_MULTI_AGENT" = true ]; then
+    FULL_CMD="$FULL_CMD --enable multi_agent"
+fi
+
+FULL_CMD="$FULL_CMD ${CODEX_ARGS[*]}"
 
 # Run the command
 if [ "$ENABLE_LOG" = true ]; then
