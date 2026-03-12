@@ -3,7 +3,7 @@
 # gptsandbox - Hardened sandbox for running Codex CLI
 # https://github.com/containers/bubblewrap
 
-VERSION="1.0.0"
+VERSION="1.0.1"
 SCRIPT_NAME=$(basename "$0")
 
 # --- Help Function ---
@@ -39,7 +39,7 @@ OPTIONS:
     -R, --ro-dir <dir>      Mount a directory inside the working directory as
                             read-only. Can be specified multiple times.
                             Paths are relative to the working directory.
-    --no-multi-agent        Disable default Codex multi-agent feature flag
+    --no-multi-agent        Disable default Codex multi-agent feature override
 
 CODEX ARGUMENTS:
     All Codex CLI options are supported. Use '--' to separate sandbox
@@ -65,7 +65,7 @@ EXAMPLES:
     ${SCRIPT_NAME} -- "analyze this project"   Start Codex with prompt
     ${SCRIPT_NAME} --ro-dir vendor        Protect vendor/ from writes
     ${SCRIPT_NAME} -R lib -R dist         Protect multiple directories
-    ${SCRIPT_NAME} --no-multi-agent       Run without forcing multi-agent
+    ${SCRIPT_NAME} --no-multi-agent       Force multi-agent off for this run
 
 READ-ONLY DIRECTORIES:
     Directories can be made read-only within the working directory using
@@ -314,9 +314,9 @@ if [ "$PROTECT_ENV" = true ]; then
     echo "🔐 Env Protection: ENABLED (--protect-env)"
 fi
 if [ "$ENABLE_MULTI_AGENT" = true ]; then
-    echo "🤖 Multi-Agent: ENABLED (default --enable multi_agent)"
+    echo "🤖 Multi-Agent: ENABLED (default -c features.multi_agent=true)"
 else
-    echo "🤖 Multi-Agent: DISABLED (--no-multi-agent)"
+    echo "🤖 Multi-Agent: DISABLED (-c features.multi_agent=false)"
 fi
 if [ ${#RO_DIRS[@]} -gt 0 ]; then
     echo "📖 Read-Only Dirs: ${#RO_DIRS[@]} specified (--ro-dir)"
@@ -478,7 +478,9 @@ else
 fi
 
 if [ "$ENABLE_MULTI_AGENT" = true ]; then
-    FULL_CMD="$FULL_CMD --enable multi_agent"
+    FULL_CMD="$FULL_CMD -c features.multi_agent=true"
+else
+    FULL_CMD="$FULL_CMD -c features.multi_agent=false"
 fi
 
 FULL_CMD="$FULL_CMD ${CODEX_ARGS[*]}"
